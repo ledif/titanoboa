@@ -10,6 +10,9 @@ isoroot := env("TITANOBOA_ISO_ROOT", "work/iso-root")
 tmpl_search_for_dnf := '{ which dnf5 || which dnf; } 2>/dev/null'
 #######################
 
+export SUDO_DISPLAY := if `if [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then echo true; fi` == "true" { "true" } else { "false" }
+export SUDOIF := if `id -u` == "0" { "" } else if SUDO_DISPLAY == "true" { "sudo --askpass" } else { "sudo" }
+
 init-work:
     mkdir -p {{ workdir }}
     mkdir -p {{ isoroot }}
@@ -18,8 +21,8 @@ initramfs $IMAGE: init-work
     #!/usr/bin/env bash
     # THIS NEEDS dracut-live
     set -xeuo pipefail
-    sudo podman pull $IMAGE
-    sudo podman run --privileged --rm -i -v .:/app:Z $IMAGE \
+    ${SUDOIF} podman pull $IMAGE
+    ${SUDOIF} podman run --privileged --rm -i -v .:/app:Z $IMAGE \
         sh <<'INITRAMFSEOF'
     set -xeuo pipefail
     sudo dnf install -y dracut dracut-live kernel
@@ -43,14 +46,14 @@ rootfs $IMAGE: init-work
     set -xeuo pipefail
     ROOTFS="{{ workdir }}/rootfs"
     mkdir -p $ROOTFS
-    ctr="$(sudo podman create --rm "${IMAGE}")" && trap "sudo podman rm $ctr" EXIT
-    sudo podman export $ctr | tar -xf - -C "${ROOTFS}"
+    ctr="$(${SUDOIF} podman create --rm "${IMAGE}")" && trap "${SUDOIF} podman rm $ctr" EXIT
+    ${SUDOIF} podman export $ctr | tar -xf - -C "${ROOTFS}"
 
 rootfs-setuid:
     #!/usr/bin/env bash
     set -xeuo pipefail
     ROOTFS="{{ workdir }}/rootfs"
-    sudo sh -c "
+    ${SUDOIF} sh -c "
     for file in usr/bin/sudo usr/lib/polkit-1/polkit-agent-helper-1 usr/bin/passwd /usr/bin/pkexec ; do
         chmod u+s ${ROOTFS}/\${file}
     done"
@@ -62,16 +65,16 @@ rootfs-include-container $IMAGE:
     # ISO_ROOTFS="{{ workdir }}/iso-root"
     # sudo mkdir -p "${ISO_ROOTFS}/containers/storage"
     # Needs to exist so that we can mount to it
-    sudo mkdir -p "${ROOTFS}/var/lib/containers/storage"
-    sudo podman push "${IMAGE}" "containers-storage:[overlay@$(realpath "$ROOTFS")/var/lib/containers/storage]$IMAGE"
-    sudo curl -fSsLo "${ROOTFS}/usr/bin/fuse-overlayfs" "https://github.com/containers/fuse-overlayfs/releases/download/v1.14/fuse-overlayfs-$(arch)"
-    sudo chmod +x "${ROOTFS}/usr/bin/fuse-overlayfs"
+    ${SUDOIF} mkdir -p "${ROOTFS}/var/lib/containers/storage"
+    ${SUDOIF} podman push "${IMAGE}" "containers-storage:[overlay@$(realpath "$ROOTFS")/var/lib/containers/storage]$IMAGE"
+    ${SUDOIF} curl -fSsLo "${ROOTFS}/usr/bin/fuse-overlayfs" "https://github.com/containers/fuse-overlayfs/releases/download/v1.14/fuse-overlayfs-$(arch)"
+    ${SUDOIF} chmod +x "${ROOTFS}/usr/bin/fuse-overlayfs"
 
 rootfs-install-livesys-scripts: init-work
     #!/usr/bin/env bash
     set -xeuo pipefail
     ROOTFS="{{ workdir }}/rootfs"
-    sudo podman run --security-opt label=type:unconfined_t -i --rootfs "$(realpath ${ROOTFS})" /usr/bin/bash \
+    ${SUDOIF} podman run --security-opt label=type:unconfined_t -i --rootfs "$(realpath ${ROOTFS})" /usr/bin/bash \
     <<"LIVESYSEOF"
     set -xeuo pipefail
     dnf="$({{tmpl_search_for_dnf}})"
@@ -108,7 +111,7 @@ squash $IMAGE: init-work
     if [ -e "{{ workdir }}/squashfs.img" ] ; then
         exit 0
     fi
-    sudo podman run --privileged --rm -i -v .:/app:Z -v "./${ROOTFS}:/rootfs:Z" "${IMAGE}" \
+    ${SUDOIF} podman run --privileged --rm -i -v .:/app:Z -v "./${ROOTFS}:/rootfs:Z" "${IMAGE}" \
         sh <<"SQUASHEOF"
     set -xeuo pipefail
     sudo dnf install -y squashfs-tools
@@ -121,13 +124,13 @@ iso-organize: init-work
     mkdir -p {{ isoroot }}/boot/grub {{ isoroot }}/LiveOS
     cp src/grub.cfg {{ isoroot }}/boot/grub
     cp {{ workdir }}/rootfs/lib/modules/*/vmlinuz {{ isoroot }}/boot
-    sudo cp {{ workdir }}/initramfs.img {{ isoroot }}/boot
-    sudo mv {{ workdir }}/squashfs.img {{ isoroot }}/LiveOS/squashfs.img
+    ${SUDOIF} cp {{ workdir }}/initramfs.img {{ isoroot }}/boot
+    ${SUDOIF} mv {{ workdir }}/squashfs.img {{ isoroot }}/LiveOS/squashfs.img
 
 iso:
     #!/usr/bin/env bash
     set -xeuo pipefail
-    sudo podman run --privileged --rm -i -v ".:/app:Z" registry.fedoraproject.org/fedora:41 \
+    ${SUDOIF} podman run --privileged --rm -i -v ".:/app:Z" registry.fedoraproject.org/fedora:41 \
         sh <<"ISOEOF"
     set -xeuo pipefail
     sudo dnf install -y grub2 grub2-efi grub2-tools-extra xorriso
@@ -153,11 +156,11 @@ build image livesys="0" clean_rootfs="1":
 
 clean clean_rootfs="1":
     #!/usr/bin/env bash
-    sudo umount work/rootfs/var/lib/containers/storage/overlay/ || true
-    sudo umount work/rootfs/containers/storage/overlay/ || true
-    sudo umount work/iso-root/containers/storage/overlay/ || true
-    sudo rm -rf output.iso
-    [ "{{ clean_rootfs }}" == "1" ] && sudo rm -rf {{ workdir }}
+    ${SUDOIF} umount work/rootfs/var/lib/containers/storage/overlay/ || true
+    ${SUDOIF} umount work/rootfs/containers/storage/overlay/ || true
+    ${SUDOIF} umount work/iso-root/containers/storage/overlay/ || true
+    ${SUDOIF} rm -rf output.iso
+    [ "{{ clean_rootfs }}" == "1" ] && ${SUDOIF} rm -rf {{ workdir }}
 
 vm ISO_FILE *ARGS:
     #!/usr/bin/env bash
