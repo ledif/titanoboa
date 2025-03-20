@@ -25,7 +25,7 @@ initramfs $IMAGE: init-work
     ${SUDOIF} podman run --privileged --rm -i -v .:/app:Z $IMAGE \
         sh <<'INITRAMFSEOF'
     set -xeuo pipefail
-    sudo dnf install -y dracut dracut-live kernel
+    dnf install -y dracut dracut-live kernel
     INSTALLED_KERNEL=$(rpm -q kernel-core --queryformat "%{evr}.%{arch}" | tail -n 1)
     cat >/app/work/fake-uname <<EOF
     #!/usr/bin/env bash
@@ -114,7 +114,7 @@ squash $IMAGE: init-work
     ${SUDOIF} podman run --privileged --rm -i -v .:/app:Z -v "./${ROOTFS}:/rootfs:Z" "${IMAGE}" \
         sh <<"SQUASHEOF"
     set -xeuo pipefail
-    sudo dnf install -y squashfs-tools
+    dnf install -y squashfs-tools
     mksquashfs /rootfs /app/{{ workdir }}/squashfs.img -all-root
     SQUASHEOF
 
@@ -133,7 +133,7 @@ iso:
     ${SUDOIF} podman run --privileged --rm -i -v ".:/app:Z" registry.fedoraproject.org/fedora:41 \
         sh <<"ISOEOF"
     set -xeuo pipefail
-    sudo dnf install -y grub2 grub2-efi grub2-tools-extra xorriso
+    dnf install -y grub2 grub2-efi grub2-tools-extra xorriso
     grub2-mkrescue --xorriso=/app/src/xorriso_wrapper.sh -o /app/output.iso /app/{{ isoroot }}
     ISOEOF
 
