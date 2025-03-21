@@ -18,7 +18,7 @@ initramfs $IMAGE: init-work
     #!/usr/bin/env bash
     # THIS NEEDS dracut-live
     set -xeuo pipefail
-    # sudo podman pull $IMAGE
+    sudo podman pull $IMAGE
     sudo podman run --privileged --rm -i -v .:/app:Z $IMAGE \
         sh <<'INITRAMFSEOF'
     set -xeuo pipefail
@@ -47,15 +47,10 @@ rootfs $IMAGE: init-work
     ctr="$(sudo podman create --rm "${IMAGE}")" && trap "sudo podman rm $ctr" EXIT
     sudo podman export $ctr | tar -xf - -C "${ROOTFS}"
 
-    # Make /var/tmp be a tmpfs by symlinking to /tmp,
-    # in order to make bootc work at runtime.
-    rm -r "$ROOTFS"/var/tmp
-    ln -sr "$ROOTFS"/tmp "$ROOTFS"/var/tmp
+    # Copy system files to rootfs
+    rsync -aP src/system/ $ROOTFS
 
-    # Add cli installer
-    cp {{workdir}}/src/titanoboa-install "$ROOTFS"/usr/bin/titanoboa-install
-    chmod +x "$ROOTFS"/usr/bin/titanoboa-install
-    echo "export TITANOBOA_IMAGE=${IMAGE}"
+    echo "export TITANOBOA_IMAGE=${IMAGE}" > "$ROOTFS"/etc/profile.d/titanoboa.sh
 
 rootfs-setuid:
     #!/usr/bin/env bash
@@ -132,6 +127,7 @@ rootfs-install-livesys-scripts: init-work
 
     # Enable services
     systemctl enable livesys.service livesys-late.service
+    systemctl enable fix-var-tmp.service
     LIVESYSEOF
 
 squash $IMAGE: init-work
@@ -168,7 +164,7 @@ iso:
     grub2-mkrescue --xorriso=/app/src/xorriso_wrapper.sh -o /app/output.iso /app/{{ isoroot }}
     ISOEOF
 
-build image livesys="0" clean_rootfs="1" flatpaks_file="src/flatpaks.example.txt":
+build image clean_rootfs="1" flatpaks_file="src/flatpaks.example.txt":
     #!/usr/bin/env bash
     set -xeuo pipefail
     just clean "{{ clean_rootfs }}"
@@ -178,9 +174,7 @@ build image livesys="0" clean_rootfs="1" flatpaks_file="src/flatpaks.example.txt
     just rootfs-include-container "{{ image }}"
     just rootfs-include-flatpaks "{{ flatpaks_file }}"
 
-    if [[ {{ livesys }} == 1 ]]; then
-      just rootfs-install-livesys-scripts
-    fi
+    just rootfs-install-livesys-scripts
 
     just squash "{{ image }}"
     just iso-organize

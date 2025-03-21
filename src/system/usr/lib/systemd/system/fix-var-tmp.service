@@ -1,0 +1,11 @@
+[Unit]
+Description=Fix /var/tmp Symlink
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'rm -rf /var/tmp && ln -s /tmp /var/tmp'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

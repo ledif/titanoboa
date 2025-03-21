@@ -33,4 +33,4 @@ else
   wipe_flag=""
 fi
 
-#pkexec bootc install to-disk "${disk}" ${wipe_flag} --source-imgref "containers-storage:${TITANOBOA_IMAGE}"
+pkexec bootc install to-disk "${disk}" ${wipe_flag} --source-imgref "containers-storage:${TITANOBOA_IMAGE}"
