@@ -1,0 +1,36 @@
+#!/bin/bash
+
+set -euo pipefail
+
+usage() {
+  echo "Usage: $0 <disk>"
+  echo "Example: $0 /dev/sdX"
+  exit 1
+}
+
+if [[ -z ${TITANOBOA_IMAGE:-} ]]; then
+  echo "Error: \$TITANOBOA_IMAGE must be set"
+  exit 1
+fi
+
+if [[ $# -ne 1 ]]; then
+  echo "Error: No disk specified"
+  usage
+fi
+
+disk=$1
+
+if [[ ! -b $disk ]]; then
+  echo "Error: $disk is not a valid block device"
+  exit 1
+fi
+
+# Check if the disk has existing partitions
+if lsblk -n -o NAME "${disk}" | grep -q "$(basename "${disk}")p\?[0-9]$"; then
+  echo "Existing partitions found on ${disk}, using --wipe"
+  wipe_flag="--wipe"
+else
+  wipe_flag=""
+fi
+
+#pkexec bootc install to-disk "${disk}" ${wipe_flag} --source-imgref "containers-storage:${TITANOBOA_IMAGE}"

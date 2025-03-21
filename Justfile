@@ -52,6 +52,11 @@ rootfs $IMAGE: init-work
     rm -r "$ROOTFS"/var/tmp
     ln -sr "$ROOTFS"/tmp "$ROOTFS"/var/tmp
 
+    # Add cli installer
+    cp {{workdir}}/src/titanoboa-install "$ROOTFS"/usr/bin/titanoboa-install
+    chmod +x "$ROOTFS"/usr/bin/titanoboa-install
+    echo "export TITANOBOA_IMAGE=${IMAGE}"
+
 rootfs-setuid:
     #!/usr/bin/env bash
     set -xeuo pipefail
