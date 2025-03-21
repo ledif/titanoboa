@@ -22,6 +22,14 @@ just build ghcr.io/ublue-os/bluefin:lts
 just vm ./output.iso
 ```
 
+## CLI installer
+
+Once the ISO is booted, you can blast the disk to install the image to it using `bootc install`
+
+```bash
+titanoboa-install /dev/sda
+```
+
 ## TODO
 - [ ] Have an installer for the Live ISO
 - [ ] Different names for each image
