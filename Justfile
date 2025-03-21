@@ -54,6 +54,7 @@ rootfs-setuid:
     set -xeuo pipefail
     ROOTFS="{{ workdir }}/rootfs"
     ${SUDOIF} sh -c "
+    printf "R /var/tmp - - - -\nL /var/tmp - - - - /tmp" > ${ROOTFS}/usr/lib/tmpfiles.d/var-tmp-symlink.conf
     for file in usr/bin/sudo usr/lib/polkit-1/polkit-agent-helper-1 usr/bin/passwd /usr/bin/pkexec ; do
         chmod u+s ${ROOTFS}/\${file}
     done"
